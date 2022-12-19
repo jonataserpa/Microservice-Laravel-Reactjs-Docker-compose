@@ -1,0 +1,75 @@
+version: '3'
+
+services:
+
+    app:
+        build: .
+        container_name: micro-videos-app
+        entrypoint: dockerize -wait tcp://db:3306 -timeout 40s ./.docker/entrypoint.sh
+        ports:
+            - "3000:3000"
+            - "35729:35729"
+        environment:
+            - CHOKIDAR_USEPOLLING=true
+        volumes:
+            - .:/var/www
+            - ./.docker/php/custom.ini:/usr/local/etc/php/conf.d/custom.ini
+        networks:
+            - app-network
+            - rabbitmq_codeflix
+        depends_on:
+            - db
+            - redis
+        extra_hosts:
+            - "host.docker.internal:172.17.0.1"
+
+    nginx:
+        build: .docker/nginx
+        container_name: micro-videos-nginx
+        restart: always
+        tty: true
+        ports:
+            - "8000:80"
+        volumes:
+            - .:/var/www
+        networks:
+            - app-network
+        depends_on:
+            - app
+
+    db:
+        build: ./.docker/mysql
+        container_name: micro-videos-db
+        restart: always
+        tty: true
+        ports:
+            - "33006:3306"
+        volumes:
+            - ./.docker/dbdata:/var/lib/mysql
+            - ./.docker/mysql:/docker-entrypoint-initdb.d
+        environment:
+            - MYSQL_ROOT_PASSWORD=root
+            - MYSQL_USER=root
+        networks:
+            - app-network
+
+    redis:
+        image: redis:alpine
+        container_name: micro-videos-redis
+        expose:
+            - 6379
+        networks:
+            - app-network
+    
+    selenium:
+        image: selenium/standalone-chrome
+        expose:
+           - 4444
+        networks:
+           - app-network
+
+networks:
+    app-network:
+        driver: bridge
+    rabbitmq_codeflix:
+        external: true
